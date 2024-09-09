@@ -1,12 +1,12 @@
-use chrono::{Local, Utc};
-use serde::{Deserialize, Serialize};
-use url::form_urlencoded::byte_serialize;
-use crate::{Client, Error};
 use crate::Result;
-use crypto::mac::Mac;
+use crate::{Client, Error};
+use chrono::{Local, Utc};
 use crypto::hmac::Hmac;
+use crypto::mac::Mac;
 use crypto::sha1::Sha1;
-use tracing::{error, info, debug};
+use serde::{Deserialize, Serialize};
+use tracing::{debug, error, info};
+use url::form_urlencoded::byte_serialize;
 
 pub struct SmsRequest<T: Serialize> {
     pub phones: Vec<String>,
@@ -53,7 +53,7 @@ impl Client {
         // * specialUrlEncode(参数Key) + "=" + specialUrlEncode(参数值)
         let params: Vec<String> = params
             .into_iter()
-            .map(|(k,v)|format!("{}={}", special_url_encode(k), special_url_encode(v)))
+            .map(|(k, v)| format!("{}={}", special_url_encode(k), special_url_encode(v)))
             .collect();
         let sorted_query_string = params.join("&");
         debug!("sorted_query_string: {}", sorted_query_string);
@@ -81,15 +81,37 @@ impl Client {
         debug!("final_url: {}", final_url);
         self.http
             .get(&final_url)
-            .send().await?
+            .send()
+            .await?
             .json::<SmsResponse>()
-            .await.
-            map_err(From::from)
-            .and_then(|resp| {
-                if resp.code.eq("OK") {
+            .await
+            .map_err(From::from)
+            .and_then(|resp| match resp.code.as_str() {
+                "OK" => {
                     info!("send sms success: {:#?}", resp);
                     Ok(())
-                } else {
+                }
+                "isv.OUT_OF_SERVICE" => {
+                    error!("send sms failed: {:#?}", resp);
+                    Err(Error::OutOfService(resp.message))
+                }
+                "isv.MOBILE_NUMBER_ILLEGAL" | "isv.INVALID_PARAMETERS" => {
+                    error!("send sms failed: {:#?}", resp);
+                    Err(Error::InvalidParameter(resp.message))
+                }
+                "isv.AMOUNT_NOT_ENOUGH" => {
+                    error!("send sms failed: {:#?}", resp);
+                    Err(Error::OutOfService(resp.message))
+                }
+                "isv.SMS_SIGNATURE_ILLEGAL" | "SignatureDoesNotMatch" | "isv.SMS_SIGN_ILLEGAL" => {
+                    error!("send sms failed: {:#?}", resp);
+                    Err(Error::SignatureIssue(resp.message))
+                }
+                "isv.DAY_LIMIT_CONTROL" | "isv.MONTH_LIMIT_CONTROL" => {
+                    error!("send sms failed: {:#?}", resp);
+                    Err(Error::QuotaLimit(resp.message))
+                }
+                _ => {
                     error!("send sms failed: {:#?}", resp);
                     Err(Error::Internal(resp.message))
                 }
