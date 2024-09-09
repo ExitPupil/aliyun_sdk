@@ -19,4 +19,10 @@ pub enum Error {
 
     #[error("invalid parameter: {0}")]
     InvalidParameter(String),
+
+    #[error("content audit issue: {0}")]
+    AuditIssue(String),
+
+    #[error("region limit: {0}")]
+    RegionLimit(String),
 }

@@ -107,9 +107,19 @@ impl Client {
                     error!("send sms failed: {:#?}", resp);
                     Err(Error::SignatureIssue(resp.message))
                 }
-                "isv.DAY_LIMIT_CONTROL" | "isv.MONTH_LIMIT_CONTROL" => {
+                "isv.DAY_LIMIT_CONTROL"
+                | "isv.MONTH_LIMIT_CONTROL"
+                | "isv.BUSINESS_LIMIT_CONTROL" => {
                     error!("send sms failed: {:#?}", resp);
                     Err(Error::QuotaLimit(resp.message))
+                }
+                "CONTENT_KEYWORD" => {
+                    error!("send sms failed: {:#?}", resp);
+                    Err(Error::AuditIssue(resp.message))
+                }
+                "SP_NOT_BY_INTER_SMS" => {
+                    error!("send sms failed: {:#?}", resp);
+                    Err(Error::RegionLimit(resp.message))
                 }
                 _ => {
                     error!("send sms failed: {:#?}", resp);
